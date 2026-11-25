@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#02060a" />
+<title>TRAE OS — BOOT SEQUENCE</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  :root{
+    --bg:#02060a;
+    --ink:#d8f6fb;
+    --dim:rgba(176,232,242,.46);
+    --faint:rgba(120,205,225,.13);
+    --accent:#5ff4ff;
+    --accent-soft:rgba(95,244,255,.35);
+    --hud:clamp(290px,56vmin,600px);
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono","Roboto Mono",Menlo,Consolas,monospace;
+    --sans:"Helvetica Neue",Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);
+    overflow:hidden;-webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  /* ============ stage / atmosphere ============ */
+  .stage{
+    position:fixed;inset:0;overflow:hidden;cursor:crosshair;
+    background:
+      radial-gradient(ellipse 90% 72% at 50% 42%,#081a22 0%,#041016 42%,#010509 78%,#000305 100%);
+  }
+  .stage.boosting{--accent:#c4a6ff;--accent-soft:rgba(196,166,255,.4)}
+
+  .bg-grid{
+    position:absolute;left:-40%;right:-40%;bottom:-12%;height:52%;
+    background-image:
+      linear-gradient(rgba(95,244,255,.10) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(95,244,255,.10) 1px,transparent 1px);
+    background-size:72px 72px;
+    transform:perspective(620px) rotateX(73deg);
+    transform-origin:bottom center;
+    -webkit-mask-image:linear-gradient(to top,rgba(0,0,0,.9),transparent 72%);
+    mask-image:linear-gradient(to top,rgba(0,0,0,.9),transparent 72%);
+    opacity:.5;pointer-events:none;
+    animation:gridDrift 24s linear infinite;
+  }
+  @keyframes gridDrift{from{background-position:0 0}to{background-position:0 72px}}
+
+  .scanlines{
+    position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px);
+    mix-blend-mode:overlay;opacity:.55;
+  }
+  .sweep{
+    position:absolute;left:0;right:0;height:140px;top:-30%;pointer-events:none;
+    background:linear-gradient(to bottom,transparent,rgba(95,244,255,.055),transparent);
+    mix-blend-mode:screen;
+    animation:sweep 12s linear infinite;
+  }
+  @keyframes sweep{0%{transform:translateY(-30vh)}100%{transform:translateY(135vh)}}
+  .vignette{
+    position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 42%,rgba(0,0,0,.72) 100%);
+  }
+  .noise{
+    position:absolute;inset:0;pointer-events:none;opacity:.05;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  }
+
+  /* ============ corner brackets ============ */
+  .corner{position:absolute;width:44px;height:44px;pointer-events:none;opacity:.5}
+  .corner::before,.corner::after{content:"";position:absolute;background:rgba(95,244,255,.5)}
+  .corner::before{width:1px;height:14px}
+  .corner::after{width:14px;height:1px}
+  .corner.tl{top:16px;left:16px}
+  .corner.tr{top:16px;right:16px}
+  .corner.bl{bottom:16px;left:16px}
+  .corner.br{bottom:16px;right:16px}
+  .corner.tl::before{left:0;top:0}
+  .corner.tl::after{left:0;top:0}
+  .corner.tr::before{right:0;top:0}
+  .corner.tr::after{right:0;top:0}
+  .corner.bl::before{left:0;bottom:0}
+  .corner.bl::after{left:0;bottom:0}
+  .corner.br::before{right:0;bottom:0}
+  .corner.br::after{right:0;bottom:0}
+
+  /* ============ top bar ============ */
+  .topbar{
+    position:absolute;top:0;left:0;right:0;z-index:30;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:26px 30px;pointer-events:none;
+  }
+  .topbar > *{pointer-events:auto}
+  .brand{display:flex;align-items:center;gap:13px}
+  .brand-mark{
+    width:26px;height:26px;border:1px solid rgba(95,244,255,.55);
+    display:grid;place-items:center;font-size:13px;font-weight:300;color:var(--accent);
+    box-shadow:0 0 18px rgba(95,244,255,.18),inset 0 0 10px rgba(95,244,255,.08);
+  }
+  .brand-text{display:flex;flex-direction:column;gap:4px;line-height:1}
+  .brand-text strong{font-size:11px;font-weight:500;letter-spacing:.34em;color:var(--ink)}
+  .brand-text small{font-size:8.5px;letter-spacing:.24em;color:var(--dim)}
+  .top-right{display:flex;align-items:center;gap:14px}
+  .clock{font-size:10.5px;letter-spacing:.22em;color:var(--dim);font-variant-numeric:tabular-nums}
+  .sep{width:1px;height:14px;background:rgba(95,244,255,.2)}
+  .ui-btn{
+    font-family:var(--mono);font-size:9px;letter-spacing:.22em;color:var(--dim);
+    background:transparent;border:1px solid rgba(95,244,255,.22);
+    padding:7px 11px;cursor:pointer;transition:.25s;text-transform:uppercase;
+  }
+  .ui-btn:hover{color:var(--accent);border-color:rgba(95,244,255,.6);box-shadow:0 0 20px rgba(95,244,255,.14)}
+  .ui-btn:active{transform:translateY(1px)}
+
+  /* ============ layout ============ */
+  .main{
+    position:absolute;inset:0;z-index:10;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:clamp(6px,1.8vmin,20px);
+    padding:84px 24px 72px;
+  }
+  .hud-wrap{position:relative;width:var(--hud);height:var(--hud);flex:none}
+
+  .parallax{
+    width:100%;height:100%;will-change:transform;
+    transition:transform .35s ease-out;
+  }
+  .stage:not(.armed) .parallax{transform:scale(.93)}
+
+  .hud{
+    position:relative;width:100%;height:100%;
+    transition:transform .9s cubic-bezier(.22,1,.36,1),opacity 1s;
+    cursor:grab;touch-action:none;
+  }
+  .hud.dragging{cursor:grabbing;transition:none}
+  .hud::before{
+    content:"";position:absolute;inset:8%;border-radius:50%;pointer-events:none;
+    background:conic-gradient(from 0deg,rgba(95,244,255,.10),transparent 22%,transparent 50%,rgba(95,244,255,.07) 74%,transparent);
+    -webkit-mask-image:radial-gradient(circle,transparent 58%,#000 62%,#000 70%,transparent 74%);
+    mask-image:radial-gradient(circle,transparent 58%,#000 62%,#000 70%,transparent 74%);
+    animation:spin 26s linear infinite;animation-play-state:paused;opacity:.0;
+    transition:opacity 1.2s;
+  }
+  .stage.armed .hud::before{opacity:1;animation-play-state:running}
+  .stage:not(.armed) .hud{opacity:.16}
+  .stage.armed .hud{opacity:1}
+
+  .rings{display:block;width:100%;height:100%;overflow:visible}
+  .ring{fill:none;stroke:rgba(95,244,255,.16);stroke-width:1}
+  .ring.faint{stroke:rgba(95,244,255,.085)}
+  .tick{stroke:rgba(95,244,255,.32)}
+  .tick.major{stroke:rgba(95,244,255,.55)}
+  .arc{
+    fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;opacity:.55;
+    filter:drop-shadow(0 0 5px rgba(95,244,255,.7));
+  }
+  .arc2{fill:none;stroke:rgba(95,244,255,.5);stroke-width:1.5;stroke-linecap:round;opacity:.6}
+  .progress{
+    fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;
+    filter:drop-shadow(0 0 6px rgba(95,244,255,.85));
+  }
+  .hex{fill:none;stroke:rgba(95,244,255,.22);stroke-width:1}
+  .hex.inner{stroke:rgba(95,244,255,.1)}
+  .crosshair line{stroke:rgba(95,244,255,.4);stroke-width:1}
+  .orbit circle{fill:var(--accent);opacity:.8;filter:drop-shadow(0 0 6px var(--accent))}
+  .rings{transition:opacity 1s}
+
+  .spin-slow{animation:spin 52s linear infinite;animation-play-state:paused}
+  .spin-rev{animation:spin 110s linear infinite reverse;animation-play-state:paused}
+  .spin-fast{animation:spin 18s linear infinite;animation-play-state:paused}
+  .spin-dots{animation:spin 11s linear infinite;animation-play-state:paused}
+  .stage.armed .spin-slow,.stage.armed .spin-rev,.stage.armed .spin-fast,.stage.armed .spin-dots{animation-play-state:running}
+  .stage.booting .spin-fast{animation-duration:3.2s}
+  .stage.booting .spin-dots{animation-duration:5s}
+  .stage.boosting .spin-fast{animation-duration:2.4s}
+  .stage.boosting .spin-slow{animation-duration:14s}
+  .stage:not(.armed) .rings{opacity:.5}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spin-slow,.spin-rev,.spin-fast,.spin-dots{transform-box:view-box;transform-origin:50% 50%}
+
+  /* core */
+  .core{
+    position:absolute;left:50%;top:50%;width:26%;aspect-ratio:1;
+    transform:translate(-50%,-50%);display:grid;place-items:center;
+  }
+  .core-halo{
+    position:absolute;inset:-34%;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,var(--accent-soft),transparent 62%);
+    opacity:0;transition:opacity 1.4s;
+  }
+  .stage.online .core-halo{opacity:.75;animation:breathe 5.5s ease-in-out infinite}
+  .stage.boosting .core-halo{opacity:1;animation-duration:1.6s}
+  .core-disc{
+    width:100%;height:100%;border-radius:50%;display:grid;place-items:center;
+    border:1px solid rgba(95,244,255,.45);
+    background:radial-gradient(circle at 50% 42%,rgba(95,244,255,.20),rgba(3,10,14,.92) 64%);
+    box-shadow:inset 0 0 30px rgba(95,244,255,.22),0 0 40px rgba(95,244,255,.10);
+    transition:box-shadow .8s,border-color .8s;
+  }
+  .stage.ignited .core-disc{box-shadow:inset 0 0 42px rgba(95,244,255,.4),0 0 70px rgba(95,244,255,.22)}
+  .core-glyph{
+    font-family:var(--sans);font-weight:200;font-size:calc(var(--hud)*.10);
+    color:var(--accent);letter-spacing:.06em;text-indent:.06em;
+    text-shadow:0 0 20px var(--accent-soft);opacity:0;transition:opacity .9s;
+  }
+  .stage.ignited .core-glyph{opacity:1}
+  .stage.boosting .core-glyph{text-shadow:0 0 28px rgba(196,166,255,.9)}
+  @keyframes breathe{0%,100%{transform:scale(1);opacity:.65}50%{transform:scale(1.12);opacity:.95}}
+
+  .readout{
+    position:absolute;left:50%;bottom:7.5%;transform:translateX(-50%);
+    text-align:center;font-variant-numeric:tabular-nums;pointer-events:none;
+  }
+  .pct-line{display:flex;align-items:baseline;justify-content:center;gap:2px}
+  .pct-line span{
+    font-size:calc(var(--hud)*.052);font-weight:300;letter-spacing:.05em;color:var(--accent);
+    text-shadow:0 0 18px rgba(95,244,255,.45);line-height:1;
+  }
+  .pct-line em{font-style:normal;font-size:calc(var(--hud)*.018);color:var(--dim)}
+  .readout small{display:block;margin-top:7px;font-size:8.5px;letter-spacing:.34em;color:var(--dim)}
+
+  /* nodes */
+  .node{
+    position:absolute;z-index:6;display:inline-flex;align-items:center;gap:8px;
+    padding:8px 12px;border:1px solid rgba(95,244,255,.24);
+    background:rgba(3,12,16,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    color:var(--dim);font-family:var(--mono);font-size:9.5px;letter-spacing:.24em;
+    cursor:pointer;white-space:nowrap;width:max-content;
+    opacity:0;transform:translateY(8px);pointer-events:none;
+    transition:opacity .8s,transform .8s,border-color .3s,box-shadow .3s,color .3s;
+  }
+  .node::before{
+    content:"";width:5px;height:5px;background:var(--accent);transform:rotate(45deg);
+    box-shadow:0 0 9px var(--accent);flex:none;
+  }
+  .node:hover{color:var(--ink);border-color:rgba(95,244,255,.62);box-shadow:0 0 26px rgba(95,244,255,.18);transform:translateY(-1px)}
+  .stage.online .node{opacity:1;transform:none;pointer-events:auto}
+  .node--top{top:1.5%;left:0;right:0;margin-inline:auto}
+  .node--left{left:-2.5%;top:calc(50% - 15px)}
+  .node--right{right:-2.5%;top:calc(50% - 15px)}
+
+  /* wordmark */
+  .wordmark-block{text-align:center;pointer-events:none}
+  .wordmark{
+    margin:0;font-family:var(--sans);font-weight:200;
+    font-size:clamp(2.1rem,6.2vw,5.2rem);line-height:1;
+    letter-spacing:.44em;text-indent:.44em;color:#f0feff;
+    text-shadow:0 0 60px rgba(95,244,255,.22);
+    opacity:0;transform:translateY(16px);filter:blur(10px);
+    transition:opacity 1.4s cubic-bezier(.22,1,.36,1),transform 1.4s cubic-bezier(.22,1,.36,1),filter 1.4s;
+  }
+  .wordmark.show{opacity:1;transform:none;filter:blur(0)}
+  .wordmark-meta{
+    margin-top:12px;font-size:8.5px;letter-spacing:.56em;text-indent:.56em;color:var(--dim);
+    opacity:0;transition:opacity 1.6s .45s;
+  }
+  .wordmark.show + .wordmark-meta{opacity:1}
+
+  .hint{
+    font-size:8.5px;letter-spacing:.28em;color:rgba(176,232,242,.38);
+    opacity:0;transition:opacity 1.4s 1.2s;text-align:center;
+  }
+  .hint.show{opacity:1}
+
+  /* ripple */
+  .ripple{
+    position:absolute;left:50%;top:50%;width:26%;aspect-ratio:1;border-radius:50%;
+    border:1px solid var(--accent);transform:translate(-50%,-50%) scale(1);
+    pointer-events:none;animation:ripple 1.3s cubic-bezier(.22,1,.36,1) forwards;
+  }
+  @keyframes ripple{
+    0%{opacity:.9;transform:translate(-50%,-50%) scale(.9)}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(4.6)}
+  }
+
+  /* ============ bottom readouts ============ */
+  .logbar{
+    position:absolute;left:30px;bottom:26px;z-index:12;width:min(430px,42vw);
+    font-size:10px;line-height:1.95;letter-spacing:.06em;color:var(--dim);
+    pointer-events:none;
+  }
+  .logbar .log-head{
+    font-size:8px;letter-spacing:.3em;color:rgba(95,244,255,.5);margin-bottom:8px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .logbar .log-head::after{content:"";flex:1;height:1px;background:linear-gradient(to right,rgba(95,244,255,.28),transparent)}
+  .logline{display:flex;gap:10px;white-space:nowrap;overflow:hidden;animation:logIn .4s both}
+  .logline .k{color:rgba(176,232,242,.55);min-width:0}
+  .logline .v{margin-left:auto;color:var(--accent);letter-spacing:.16em;opacity:0;transform:translateX(-4px);transition:opacity .5s,transform .5s}
+  .logline .v.show{opacity:1;transform:none}
+  @keyframes logIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  .telemetry{
+    position:absolute;right:30px;bottom:28px;z-index:12;display:flex;align-items:flex-end;gap:4px;
+    height:40px;pointer-events:none;opacity:0;transition:opacity 1s;
+  }
+  .stage.online .telemetry{opacity:.8}
+  .telemetry i{
+    display:block;width:3px;background:linear-gradient(to top,rgba(95,244,255,.65),rgba(95,244,255,.1));
+    animation:meter 2.4s ease-in-out infinite alternate;
+  }
+  @keyframes meter{from{height:18%}to{height:100%}}
+  .telemetry-label{
+    position:absolute;right:30px;bottom:70px;z-index:12;font-size:8px;letter-spacing:.3em;
+    color:rgba(176,232,242,.35);pointer-events:none;
+  }
+
+  /* ============ panel ============ */
+  #panel{
+    position:fixed;z-index:40;top:50%;right:26px;width:min(336px,86vw);
+    transform:translate(26px,-50%);opacity:0;pointer-events:none;
+    transition:opacity .4s,transform .5s cubic-bezier(.22,1,.36,1);
+    background:linear-gradient(180deg,rgba(8,20,26,.94),rgba(3,9,13,.96));
+    border:1px solid rgba(95,244,255,.2);border-left:2px solid var(--accent);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    padding:20px 20px 18px;
+    box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 40px rgba(95,244,255,.05);
+  }
+  #panel.open{opacity:1;transform:translate(0,-50%);pointer-events:auto}
+  .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .panel-kicker{font-size:8px;letter-spacing:.3em;color:rgba(95,244,255,.6)}
+  .panel-title{margin:6px 0 2px;font-family:var(--sans);font-weight:300;font-size:20px;letter-spacing:.04em;color:var(--ink)}
+  .panel-sub{font-size:8px;letter-spacing:.28em;color:var(--dim)}
+  .panel-close{
+    background:transparent;border:1px solid rgba(95,244,255,.2);color:var(--dim);
+    width:24px;height:24px;line-height:1;cursor:pointer;font-size:13px;font-family:var(--mono);
+    transition:.25s;flex:none;
+  }
+  .panel-close:hover{color:var(--accent);border-color:rgba(95,244,255,.6)}
+  .panel-body{margin-top:18px;display:flex;flex-direction:column;gap:14px}
+  .row-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:7px}
+  .row-top span{font-size:9.5px;letter-spacing:.14em;color:var(--dim)}
+  .row-top b{font-size:11px;font-weight:400;letter-spacing:.06em;color:var(--accent);font-variant-numeric:tabular-nums}
+  .bar{height:2px;background:rgba(255,255,255,.07);overflow:hidden}
+  .bar i{display:block;height:100%;width:0;background:var(--accent);box-shadow:0 0 8px var(--accent-soft);transition:width 1.1s cubic-bezier(.22,1,.36,1)}
+  .panel-note{
+    margin:18px 0 0;padding-top:14px;border-top:1px solid rgba(95,244,255,.12);
+    font-size:9.5px;line-height:1.85;letter-spacing:.05em;color:rgba(176,232,242,.5);
+  }
+
+  /* ============ overlay ============ */
+  .overlay{
+    position:fixed;inset:0;z-index:60;display:grid;place-items:center;
+    background:radial-gradient(ellipse at center,rgba(3,10,14,.72),rgba(0,2,4,.92));
+    backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+    transition:opacity .8s,visibility .8s;
+  }
+  .overlay.hide{opacity:0;visibility:hidden;pointer-events:none}
+  .overlay-frame{display:flex;flex-direction:column;align-items:center;gap:34px;text-align:center;padding:24px}
+  .ov-label{font-size:9px;letter-spacing:.5em;text-indent:.5em;color:rgba(176,232,242,.5)}
+  .init-btn{
+    position:relative;font-family:var(--mono);font-size:12px;letter-spacing:.42em;text-indent:.42em;
+    color:var(--accent);background:rgba(5,18,24,.6);border:1px solid rgba(95,244,255,.55);
+    padding:18px 38px;cursor:pointer;transition:.3s;
+    box-shadow:0 0 40px rgba(95,244,255,.12),inset 0 0 24px rgba(95,244,255,.06);
+  }
+  .init-btn:hover{background:rgba(95,244,255,.1);box-shadow:0 0 60px rgba(95,244,255,.28),inset 0 0 30px rgba(95,244,255,.12)}
+  .init-btn::after{
+    content:"";position:absolute;inset:-1px;border:1px solid rgba(95,244,255,.8);
+    animation:btnPulse 2.8s cubic-bezier(.22,1,.36,1) infinite;pointer-events:none;
+  }
+  .init-btn::before{
+    content:"";position:absolute;inset:-1px;border:1px solid rgba(95,244,255,.5);
+    animation:btnPulse 2.8s cubic-bezier(.22,1,.36,1) 1.4s infinite;pointer-events:none;
+  }
+  @keyframes btnPulse{0%{transform:scale(1);opacity:.8}75%{transform:scale(1.55);opacity:0}100%{opacity:0}}
+  .ov-hint{font-size:9px;letter-spacing:.3em;color:rgba(176,232,242,.34)}
+
+  /* flash */
+  .flash{position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(200,255,255,.28),transparent 55%);opacity:0;pointer-events:none;z-index:15}
+  .flash.fire{animation:flash .9s ease-out forwards}
+  @keyframes flash{0%{opacity:0}18%{opacity:1}100%{opacity:0}}
+
+  /* ============ responsive ============ */
+  @media (max-width:760px){
+    :root{--hud:min(80vw,50vh)}
+    .topbar{padding:16px 16px}
+    .brand-text small{display:none}
+    .clock{display:none}
+    .sep{display:none}
+    .ui-btn{padding:6px 9px;font-size:8.5px;letter-spacing:.16em}
+    .logbar{display:none}
+    .telemetry,.telemetry-label{display:none}
+    .node{font-size:8px;padding:6px 8px;letter-spacing:.18em}
+    .node--left{left:-4%}
+    .node--right{right:-4%}
+    .wordmark{letter-spacing:.3em;text-indent:.3em}
+    .wordmark-meta{letter-spacing:.34em;text-indent:.34em}
+    .hint{font-size:7.5px;letter-spacing:.18em}
+    #panel{right:12px;width:min(320px,88vw)}
+    .main{padding:70px 20px 60px;gap:12px}
+  }
+  @media (max-height:720px){
+    :root{--hud:min(52vmin,330px)}
+    .main{padding:66px 20px 54px;gap:8px}
+    .wordmark{font-size:clamp(1.7rem,4.6vw,3.2rem)}
+    .wordmark-meta{margin-top:8px;font-size:8px;letter-spacing:.42em;text-indent:.42em}
+    .hint{font-size:8px}
+  }
+  @media (max-height:540px){
+    :root{--hud:min(64vmin,300px)}
+    .main{padding:54px 16px 36px}
+    .wordmark-block{display:none}
+    .hint{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="bg-grid"></div>
+  <div class="sweep"></div>
+  <div class="scanlines"></div>
+  <div class="noise"></div>
+  <div class="flash" id="flash"></div>
+  <div class="vignette"></div>
+
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><span>T</span></div>
+      <div class="brand-text">
+        <strong>TRAE OS</strong>
+        <small>MARK VII · COLD START</small>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="sep"></div>
+      <button class="ui-btn" id="soundBtn" aria-pressed="true">SOUND ON</button>
+      <button class="ui-btn" id="rebootBtn">REBOOT</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="hud-wrap">
+      <div class="parallax" id="parallax">
+        <div class="hud" id="hud">
+          <svg class="rings" viewBox="0 0 600 600" aria-hidden="true">
+            <circle class="ring" cx="300" cy="300" r="286"/>
+            <g id="ticks" class="spin-rev"></g>
+            <circle class="ring faint" cx="300" cy="300" r="248"/>
+            <g class="spin-fast">
+              <circle class="arc" cx="300" cy="300" r="264" stroke-dasharray="80 54 20 54"/>
+            </g>
+            <g class="spin-slow">
+              <circle class="arc2" cx="300" cy="300" r="226" stroke-dasharray="150 260"/>
+            </g>
+            <circle class="ring faint" cx="300" cy="300" r="198"/>
+            <circle class="progress" id="progressArc" cx="300" cy="300" r="182" transform="rotate(-90 300 300)"/>
+            <g id="hex" class="hex"></g>
+            <circle class="ring faint" cx="300" cy="300" r="94"/>
+            <g id="orbit" class="orbit spin-dots"></g>
+            <g class="crosshair">
+              <line x1="300" y1="4" x2="300" y2="16"/>
+              <line x1="300" y1="584" x2="300" y2="596"/>
+              <line x1="4" y1="300" x2="16" y2="300"/>
+              <line x1="584" y1="300" x2="596" y2="300"/>
+            </g>
+          </svg>
+
+          <div class="core" id="core">
+            <div class="core-halo"></div>
+            <div class="core-disc"><span class="core-glyph">T</span></div>
+          </div>
+
+          <div class="readout">
+            <div class="pct-line"><span id="pct">00</span><em>%</em></div>
+            <small id="statusText">STANDBY</small>
+          </div>
+        </div>
+      </div>
+
+      <button class="node node--top" data-node="system" type="button">系统 SYSTEMS</button>
+      <button class="node node--left" data-node="core" type="button">核心 CORE</button>
+      <button class="node node--right" data-node="neural" type="button">神经 NEURAL</button>
+    </section>
+
+    <div class="wordmark-block">
+      <h1 class="wordmark" id="wordmark" aria-label="TRAE">TRAE</h1>
+      <div class="wordmark-meta">AUTONOMOUS INTERFACE · MARK VII</div>
+    </div>
+
+    <div class="hint" id="hint">拖动旋转 · 点击节点查看数据 · 点击核心超载</div>
+  </main>
+
+  <div class="logbar" id="logbar">
+    <div class="log-head">BOOT LOG</div>
+    <div id="log"></div>
+  </div>
+
+  <div class="telemetry-label">TELEMETRY</div>
+  <div class="telemetry" id="telemetry"></div>
+
+  <aside id="panel" aria-hidden="true">
+    <div class="panel-head">
+      <div>
+        <div class="panel-kicker" id="panelKicker">01 / ARC CORE</div>
+        <h2 class="panel-title" id="panelTitle">方舟反应堆</h2>
+        <div class="panel-sub" id="panelSub">ARC REACTOR</div>
+      </div>
+      <button class="panel-close" id="panelClose" aria-label="关闭">×</button>
+    </div>
+    <div class="panel-body" id="panelBody"></div>
+    <p class="panel-note" id="panelNote"></p>
+  </aside>
+
+  <div class="overlay" id="overlay">
+    <div class="overlay-frame">
+      <div class="ov-label">TRAE · AUTONOMOUS INTERFACE</div>
+      <button class="init-btn" id="initBtn" type="button">INITIALIZE</button>
+      <div class="ov-hint">点击启动 / TAP TO BOOT</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage');
+  const hud = $('hud');
+  const parallax = $('parallax');
+  const pctEl = $('pct');
+  const statusEl = $('statusText');
+  const progressEl = $('progressArc');
+  const wordmark = $('wordmark');
+  const hint = $('hint');
+  const panel = $('panel');
+  const logEl = $('log');
+  const overlay = $('overlay');
+  const flash = $('flash');
+
+  /* ---------- build decorative svg ---------- */
+  const NS = 'http://www.w3.org/2000/svg';
+  const ticks = $('ticks');
+  for (let i = 0; i < 180; i++) {
+    const a = (i * 2 * Math.PI) / 180;
+    const major = i % 15 === 0;
+    const len = major ? 15 : 6;
+    const r1 = 274;
+    const line = document.createElementNS(NS, 'line');
+    line.setAttribute('x1', (300 + Math.cos(a) * r1).toFixed(2));
+    line.setAttribute('y1', (300 + Math.sin(a) * r1).toFixed(2));
+    line.setAttribute('x2', (300 + Math.cos(a) * (r1 + len)).toFixed(2));
+    line.setAttribute('y2', (300 + Math.sin(a) * (r1 + len)).toFixed(2));
+    line.setAttribute('class', 'tick' + (major ? ' major' : ''));
+    line.setAttribute('stroke-width', major ? '1.6' : '0.8');
+    ticks.appendChild(line);
+  }
+
+  const hex = $('hex');
+  [[152, 0], [152, Math.PI / 6], [118, 0]].forEach(([r, rot], idx) => {
+    const pts = [];
+    for (let i = 0; i < 6; i++) {
+      const a = rot + (i * Math.PI) / 3;
+      pts.push((300 + Math.cos(a) * r).toFixed(2) + ',' + (300 + Math.sin(a) * r).toFixed(2));
+    }
+    const poly = document.createElementNS(NS, 'polygon');
+    poly.setAttribute('points', pts.join(' '));
+    poly.setAttribute('class', 'hex' + (idx === 2 ? ' inner' : ''));
+    hex.appendChild(poly);
+  });
+
+  const orbit = $('orbit');
+  [18, 138, 258].forEach((deg) => {
+    const a = (deg * Math.PI) / 180;
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', (300 + Math.cos(a) * 250).toFixed(2));
+    c.setAttribute('cy', (300 + Math.sin(a) * 250).toFixed(2));
+    c.setAttribute('r', '2.4');
+    orbit.appendChild(c);
+  });
+
+  const C = 2 * Math.PI * 182;
+  progressEl.style.strokeDasharray = C;
+  progressEl.style.strokeDashoffset = C;
+
+  /* ---------- telemetry bars ---------- */
+  const telemetry = $('telemetry');
+  for (let i = 0; i < 16; i++) {
+    const bar = document.createElement('i');
+    bar.style.animationDelay = (i * 0.13).toFixed(2) + 's';
+    bar.style.animationDuration = (1.8 + (i % 5) * 0.3).toFixed(2) + 's';
+    telemetry.appendChild(bar);
+  }
+
+  /* ---------- clock ---------- */
+  function tickClock() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    $('clock').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  /* ---------- audio ---------- */
+  let actx = null;
+  let master = null;
+  let soundOn = true;
+
+  function initAudio() {
+    if (actx) {
+      if (actx.state === 'suspended') actx.resume();
+      return;
+    }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    actx = new AC();
+    master = actx.createGain();
+    master.gain.value = 0.14;
+    master.connect(actx.destination);
+  }
+
+  function tone(freq, dur, type, gain, slideTo) {
+    if (!soundOn || !actx) return;
+    dur = dur || 0.08;
+    const t = actx.currentTime;
+    const o = actx.createOscillator();
+    const g = actx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(gain || 0.3, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g);
+    g.connect(master);
+    o.start(t);
+    o.stop(t + dur + 0.03);
+  }
+
+  function sweepSound() {
+    if (!soundOn || !actx) return;
+    const t = actx.currentTime;
+    const o = actx.createOscillator();
+    const g = actx.createGain();
+    const f = actx.createBiquadFilter();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(48, t);
+    o.frequency.exponentialRampToValueAtTime(420, t + 1.25);
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(240, t);
+    f.frequency.exponentialRampToValueAtTime(2200, t + 1.1);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.16, t + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.35);
+    o.connect(f); f.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 1.4);
+  }
+
+  function chord() {
+    [261.63, 392.0, 523.25, 783.99].forEach((f, i) => {
+      setTimeout(() => tone(f, 1.1, 'sine', 0.26), i * 80);
+    });
+  }
+
+  /* ---------- boot sequence ---------- */
+  const LOG = [
+    ['ARC CORE', 'ONLINE'],
+    ['NEURAL LINK', 'SYNC 98.4%'],
+    ['SUIT INTEGRITY', 'VERIFIED'],
+    ['LANGUAGE MODEL', 'LOADED'],
+    ['OPTICS CALIBRATION', 'LOCKED'],
+    ['FLIGHT STABILIZER', 'ARMED'],
+    ['INTERFACE HANDSHAKE', 'ACCEPTED'],
+    ['TRAE DAEMON', 'AWAKE']
+  ];
+
+  let bootToken = 0;
+  let ignited = false;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+  }
+
+  function capLog() {
+    while (logEl.children.length > 6) logEl.removeChild(logEl.firstElementChild);
+  }
+
+  async function typeLine(key, value, token) {
+    const line = document.createElement('div');
+    line.className = 'logline';
+    const k = document.createElement('span');
+    k.className = 'k';
+    const v = document.createElement('span');
+    v.className = 'v';
+    line.appendChild(k);
+    line.appendChild(v);
+    logEl.appendChild(line);
+    capLog();
+    for (const ch of key) {
+      if (token !== bootToken) return;
+      k.textContent += ch;
+      await wait(8);
+    }
+    if (token !== bootToken) return;
+    v.textContent = value;
+    requestAnimationFrame(() => v.classList.add('show'));
+  }
+
+  async function runLogs(token) {
+    for (const [k, v] of LOG) {
+      if (token !== bootToken) return;
+      tone(1046, 0.04, 'square', 0.12);
+      await typeLine(k, v, token);
+      await wait(210);
+    }
+  }
+
+  function animateProgress(token, dur) {
+    const t0 = performance.now();
+    return new Promise((resolve) => {
+      function frame(now) {
+        if (token !== bootToken) return resolve();
+        const k = Math.min(1, (now - t0) / dur);
+        const e = 1 - Math.pow(1 - k, 1.7);
+        const val = Math.round(e * 100);
+        pctEl.textContent = val < 10 ? '0' + val : String(val);
+        progressEl.style.strokeDashoffset = String(C * (1 - e));
+        if (!ignited && e > 0.62) {
+          ignited = true;
+          ignite();
+        }
+        if (e < 0.25) setStatus('SPINNING UP');
+        else if (e < 0.62) setStatus('CALIBRATING CORE');
+        else if (e < 0.995) setStatus('LINKING SYSTEMS');
+        if (k < 1) requestAnimationFrame(frame);
+        else resolve();
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  function ignite() {
+    stage.classList.add('ignited');
+    flash.classList.remove('fire');
+    void flash.offsetWidth;
+    flash.classList.add('fire');
+    tone(220, 0.9, 'sine', 0.35, 880);
+    setTimeout(() => tone(660, 0.5, 'triangle', 0.2), 180);
+  }
+
+  async function boot() {
+    const token = ++bootToken;
+    closePanel();
+    stage.classList.remove('online', 'ignited', 'boosting');
+    stage.classList.add('armed', 'booting');
+    wordmark.classList.remove('show');
+    hint.classList.remove('show');
+    logEl.innerHTML = '';
+    ignited = false;
+    pctEl.textContent = '00';
+    progressEl.style.strokeDashoffset = String(C);
+    setStatus('COLD START');
+
+    await wait(480);
+    if (token !== bootToken) return;
+    sweepSound();
+
+    await Promise.all([animateProgress(token, 5200), runLogs(token)]);
+    if (token !== bootToken) return;
+
+    pctEl.textContent = '100';
+    progressEl.style.strokeDashoffset = '0';
+    stage.classList.remove('booting');
+    stage.classList.add('online');
+    setStatus('SYSTEM ONLINE');
+    wordmark.classList.add('show');
+    chord();
+    setTimeout(() => {
+      if (token === bootToken) hint.classList.add('show');
+    }, 1500);
+  }
+
+  /* ---------- interactions ---------- */
+  let rot = 0;
+  let drag = null;
+  let moved = false;
+
+  hud.addEventListener('pointerdown', (e) => {
+    if (!stage.classList.contains('armed')) return;
+    drag = { x: e.clientX, y: e.clientY, rot };
+    moved = false;
+    hud.classList.add('dragging');
+    hud.setPointerCapture(e.pointerId);
+  });
+
+  hud.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved = true;
+    rot = drag.rot + dx * 0.55;
+    hud.style.transform = 'rotate(' + rot.toFixed(2) + 'deg)';
+  });
+
+  function endDrag(e) {
+    if (!drag) return;
+    hud.classList.remove('dragging');
+    if (!moved) {
+      const hit = document.elementFromPoint(e.clientX, e.clientY);
+      if (hit && hit.closest('.core')) toggleBoost();
+    }
+    drag = null;
+  }
+  hud.addEventListener('pointerup', endDrag);
+  hud.addEventListener('pointercancel', (e) => {
+    hud.classList.remove('dragging');
+    drag = null;
+  });
+
+  let px = 0;
+  let py = 0;
+  let pRaf = null;
+  stage.addEventListener('pointermove', (e) => {
+    px = e.clientX / window.innerWidth - 0.5;
+    py = e.clientY / window.innerHeight - 0.5;
+    if (!stage.classList.contains('online') || pRaf) return;
+    pRaf = requestAnimationFrame(() => {
+      pRaf = null;
+      parallax.style.transform =
+        'perspective(1500px) rotateX(' + (-py * 5).toFixed(2) + 'deg) rotateY(' + (px * 7).toFixed(2) + 'deg)';
+    });
+  });
+  stage.addEventListener('pointerleave', () => {
+    parallax.style.transform = '';
+  });
+
+  function toggleBoost() {
+    if (!stage.classList.contains('online')) return;
+    const on = stage.classList.toggle('boosting');
+    setStatus(on ? 'OVERDRIVE' : 'SYSTEM ONLINE');
+    tone(on ? 523 : 392, 0.22, 'triangle', 0.32, on ? 1046 : 196);
+    const r = document.createElement('div');
+    r.className = 'ripple';
+    hud.appendChild(r);
+    setTimeout(() => r.remove(), 1400);
+  }
+
+  /* ---------- panel ---------- */
+  const NODES = {
+    core: {
+      kicker: '01 / ARC CORE',
+      title: '方舟反应堆',
+      sub: 'ARC REACTOR',
+      rows: [
+        ['输出功率', '3.6 GJ/s', 92],
+        ['核心温度', '812 K', 64],
+        ['能量稳定', '99.7%', 99]
+      ],
+      note: '冷聚变稳态运行，能量回路已与神经链路同步。'
+    },
+    neural: {
+      kicker: '02 / NEURAL LINK',
+      title: '神经链路',
+      sub: 'CORTEX INTERFACE',
+      rows: [
+        ['指令延迟', '0.7 ms', 96],
+        ['同步率', '99.98%', 100],
+        ['活跃节点', '12 / 12', 82]
+      ],
+      note: '驾驶员皮层直连，双向指令通道已加密。'
+    },
+    system: {
+      kicker: '03 / SUIT SYSTEMS',
+      title: '战甲系统',
+      sub: 'MARK VII',
+      rows: [
+        ['结构完整度', '100%', 100],
+        ['模组在线', '24 / 24', 100],
+        ['运行时长', '00:01:42', 55]
+      ],
+      note: '飞行、武器、生命维持模组全部就绪。'
+    }
+  };
+
+  function openNode(key) {
+    const d = NODES[key];
+    if (!d) return;
+    $('panelKicker').textContent = d.kicker;
+    $('panelTitle').textContent = d.title;
+    $('panelSub').textContent = d.sub;
+    const body = $('panelBody');
+    body.innerHTML = '';
+    d.rows.forEach(([label, value, w]) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const top = document.createElement('div');
+      top.className = 'row-top';
+      const s = document.createElement('span');
+      s.textContent = label;
+      const b = document.createElement('b');
+      b.textContent = value;
+      top.appendChild(s);
+      top.appendChild(b);
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      const fill = document.createElement('i');
+      fill.dataset.w = String(w);
+      bar.appendChild(fill);
+      row.appendChild(top);
+      row.appendChild(bar);
+      body.appendChild(row);
+    });
+    $('panelNote').textContent = d.note;
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        panel.querySelectorAll('.bar i').forEach((el) => {
+          el.style.width = el.dataset.w + '%';
+        });
+      });
+    });
+    tone(784, 0.06, 'square', 0.18);
+  }
+
+  function closePanel() {
+    panel.classList.remove('open');
+    panel.setAttribute('aria-hidden', 'true');
+  }
+
+  document.querySelectorAll('.node').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openNode(btn.dataset.node);
+    });
+  });
+  $('panelClose').addEventListener('click', closePanel);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closePanel();
+  });
+  stage.addEventListener('click', (e) => {
+    if (panel.classList.contains('open') && !e.target.closest('#panel') && !e.target.closest('.node')) {
+      closePanel();
+    }
+  });
+
+  /* ---------- overlay / controls ---------- */
+  function startBoot() {
+    initAudio();
+    overlay.classList.add('hide');
+    setTimeout(() => {
+      overlay.style.display = 'none';
+    }, 850);
+    stage.classList.add('armed');
+    boot();
+  }
+
+  $('initBtn').addEventListener('click', startBoot);
+
+  $('soundBtn').addEventListener('click', () => {
+    soundOn = !soundOn;
+    initAudio();
+    const btn = $('soundBtn');
+    btn.textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
+    btn.setAttribute('aria-pressed', String(soundOn));
+    btn.style.color = soundOn ? '' : 'rgba(176,232,242,.28)';
+    if (soundOn) tone(880, 0.08, 'sine', 0.25);
+  });
+
+  $('rebootBtn').addEventListener('click', () => {
+    initAudio();
+    if (!stage.classList.contains('armed')) {
+      startBoot();
+      return;
+    }
+    tone(300, 0.25, 'sawtooth', 0.2, 90);
+    rot = 0;
+    hud.style.transform = 'rotate(0deg)';
+    boot();
+  });
+})();
+</script>
+</body>
+</html>
