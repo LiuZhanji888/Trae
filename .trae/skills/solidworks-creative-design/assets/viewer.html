@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Creative CAD · 概念预演</title>
+<style>
+  :root{
+    --bg:#0b0e11; --line:#222b33; --txt:#dfe7ee; --dim:#8a99a8;
+    --accent:#5eead4; --warn:#fbbf24; --bad:#f87171; --ok:#4ade80;
+    --panel:rgba(17,22,27,.86);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(1200px 700px at 65% -10%,#1b2530 0%,#0b0e11 55%,#080a0c 100%);
+    color:var(--txt); font:13px/1.5 "Inter","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  #app{display:grid; grid-template-rows:52px 1fr; height:100%}
+  header{
+    display:flex; align-items:center; gap:16px; padding:0 18px;
+    border-bottom:1px solid var(--line); backdrop-filter:blur(8px);
+  }
+  .brand{font-weight:600; letter-spacing:.02em; display:flex; align-items:center; gap:9px}
+  .brand i{width:9px;height:9px;border-radius:2px;background:var(--accent);display:block;box-shadow:0 0 14px var(--accent)}
+  .brand small{color:var(--dim); font-weight:400; font-size:11px; letter-spacing:.08em; text-transform:uppercase}
+  nav{display:flex; gap:2px; background:#0e1317; border:1px solid var(--line); border-radius:8px; padding:3px}
+  nav button{
+    background:none;border:0;color:var(--dim);padding:5px 14px;border-radius:6px;cursor:pointer;
+    font-size:12px;font-family:inherit;transition:.16s
+  }
+  nav button:hover{color:var(--txt)}
+  nav button.on{background:#1d262f;color:var(--txt);box-shadow:inset 0 0 0 1px #2b3742}
+  .spacer{flex:1}
+  .tag{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+  main{display:grid; grid-template-columns:1fr 322px; min-height:0}
+  #stage{position:relative; min-width:0; overflow:hidden}
+  #gl,#sheet{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #sheet{display:none}
+  body.mode-sheet #gl{display:none}
+  body.mode-sheet #sheet{display:block}
+  #hud{position:absolute; left:16px; bottom:14px; display:flex; gap:8px; flex-wrap:wrap; max-width:calc(100% - 32px); pointer-events:none}
+  .chip{
+    font-size:11px; color:var(--dim); background:rgba(11,14,17,.72); border:1px solid var(--line);
+    border-radius:6px; padding:4px 9px; backdrop-filter:blur(6px); font-variant-numeric:tabular-nums;
+  }
+  .chip b{color:var(--txt); font-weight:600}
+  #panel{
+    border-left:1px solid var(--line); background:var(--panel); backdrop-filter:blur(12px);
+    overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:18px;
+  }
+  #panel::-webkit-scrollbar{width:8px}
+  #panel::-webkit-scrollbar-thumb{background:#232d36;border-radius:4px}
+  h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:600;margin-bottom:9px}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-variant-numeric:tabular-nums}
+  .row span{color:var(--dim)}
+  .row b{font-weight:500}
+  .slider{margin-bottom:11px}
+  .slider label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}
+  .slider label b{color:var(--accent);font-variant-numeric:tabular-nums;font-weight:500}
+  input[type=range]{-webkit-appearance:none;width:100%;height:3px;border-radius:3px;background:#232d36;outline:none}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--accent);
+    cursor:pointer;box-shadow:0 0 0 3px rgba(94,234,212,.14)
+  }
+  .btn{
+    width:100%;background:#1a222a;border:1px solid #2a3540;color:var(--txt);padding:8px;border-radius:7px;
+    cursor:pointer;font-family:inherit;font-size:12px;transition:.15s
+  }
+  .btn:hover{background:#212b34;border-color:#37454f}
+  .btn.primary{background:rgba(94,234,212,.12);border-color:rgba(94,234,212,.35);color:var(--accent)}
+  .btn + .btn{margin-top:6px}
+  .log{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dim);
+    background:#080b0e;border:1px solid var(--line);border-radius:7px;padding:9px;max-height:150px;overflow:auto;white-space:pre-wrap
+  }
+  .log .ok{color:var(--ok)} .log .warn{color:var(--warn)} .log .bad{color:var(--bad)}
+  .kpi{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .kpi div{background:#0d1216;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .kpi small{display:block;color:var(--dim);font-size:10px;letter-spacing:.05em}
+  .kpi b{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+  #loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:12px}
+  #loading.hide{display:none}
+  .hint{font-size:11px;color:var(--dim);line-height:1.6}
+  .bar{height:4px;background:#1a222a;border-radius:3px;overflow:hidden;margin-top:5px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,#5eead4,#38bdf8)}
+</style>
+</head>
+<body class="mode-render">
+<div id="app">
+  <header>
+    <div class="brand"><i></i><span id="title">Creative CAD</span><small>concept preview</small></div>
+    <nav>
+      <button data-mode="render" class="on">造型</button>
+      <button data-mode="physics">物理</button>
+      <button data-mode="sheet">图纸</button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="tag" id="tagMeta">—</div>
+  </header>
+  <main>
+    <div id="stage">
+      <canvas id="gl"></canvas>
+      <canvas id="sheet"></canvas>
+      <div id="hud"></div>
+      <div id="loading">正在加载 spec …</div>
+    </div>
+    <aside id="panel">
+      <section>
+        <h2>设计简报</h2>
+        <div class="hint" id="brief">—</div>
+      </section>
+      <section>
+        <h2>关键指标</h2>
+        <div class="kpi" id="kpi"></div>
+      </section>
+      <section>
+        <h2>参数</h2>
+        <div id="params"></div>
+      </section>
+      <section id="physBox" style="display:none">
+        <h2>物理预演</h2>
+        <div class="row"><span>当前角度</span><b id="mAngle">—</b></div>
+        <div class="row"><span>重力力矩</span><b id="mTorque">—</b></div>
+        <div class="row"><span>最小间隙</span><b id="mGap">—</b></div>
+        <div class="row"><span>倾覆角</span><b id="mTip">—</b></div>
+        <div class="bar"><i id="mBar" style="width:0%"></i></div>
+        <button class="btn primary" id="btnPlay" style="margin-top:10px">▶ 运动扫掠</button>
+        <button class="btn" id="btnStable">📍 稳定性分析</button>
+      </section>
+      <section>
+        <h2>违约 / 日志</h2>
+        <div class="log" id="log"></div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import { evalNum, buildModel, modelMetrics } from './spec-core.js';
+
+const $ = (s) => document.querySelector(s);
+const SPEC_URL = new URLSearchParams(location.search).get('spec') || './example_spec.json';
+
+const state = {
+  spec: null, params: {}, model: null, mode: 'render',
+  root: null, parts: {}, joints: [], anim: { t: 0, playing: false },
+  THREE: null, scene: null, camera: null, renderer: null, controls: null,
+};
+
+/* ---------------- 加载 ---------------- */
+async function loadSpec() {
+  let spec;
+  try {
+    const r = await fetch(SPEC_URL, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    spec = await r.json();
+  } catch (e) {
+    spec = window.__DEMO_SPEC__;
+    log('warn', '未能读取 ' + SPEC_URL + '（' + e.message + '），已回退到内置示例。');
+  }
+  state.spec = spec;
+  state.params = {};
+  (spec.params || []).forEach((p) => { state.params[p.key] = Number(p.value); });
+  return spec;
+}
+
+/* ---------------- 场景 ---------------- */
+async function initScene() {
+  const THREE = await import('three');
+  const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+  state.THREE = THREE;
+
+  const canvas = $('#gl');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  state.renderer = renderer;
+
+  const scene = new THREE.Scene();
+  state.scene = scene;
+
+  const camera = new THREE.PerspectiveCamera(32, 1, 1, 6000);
+  camera.position.set(210, 165, 235);
+  state.camera = camera;
+
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true; controls.dampingFactor = 0.07;
+  controls.minDistance = 60; controls.maxDistance = 2000;
+  controls.target.set(0, 40, 0);
+  state.controls = controls;
+
+  scene.add(new THREE.HemisphereLight(0xdfefff, 0x1a2027, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 2.5);
+  key.position.set(160, 300, 200); key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  const s = 320;
+  key.shadow.camera.left = -s; key.shadow.camera.right = s;
+  key.shadow.camera.top = s; key.shadow.camera.bottom = -s;
+  key.shadow.camera.near = 10; key.shadow.camera.far = 1600;
+  key.shadow.bias = -0.0008;
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0x9fd8ff, 0.7); fill.position.set(-240, 120, 90); scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xffffff, 1.1); rim.position.set(-60, 90, -280); scene.add(rim);
+
+  const ground = new THREE.Mesh(
+    new THREE.CircleGeometry(1600, 96),
+    new THREE.MeshStandardMaterial({ color: 0x0e1418, roughness: 0.95, metalness: 0 })
+  );
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.6; ground.receiveShadow = true;
+  scene.add(ground);
+
+  const grid = new THREE.GridHelper(1600, 40, 0x1d2830, 0x151d24);
+  grid.position.y = -0.4; grid.material.transparent = true; grid.material.opacity = 0.55;
+  scene.add(grid);
+
+  resize();
+  window.addEventListener('resize', resize);
+  return THREE;
+}
+
+function resize() {
+  const stage = $('#stage');
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!state.renderer) return;
+  state.renderer.setSize(w, h, false);
+  state.camera.aspect = w / Math.max(h, 1);
+  state.camera.updateProjectionMatrix();
+  const sc = $('#sheet');
+  sc.width = Math.max(w * devicePixelRatio, 1);
+  sc.height = Math.max(h * devicePixelRatio, 1);
+  if (state.mode === 'sheet') drawSheet();
+}
+
+function frameCamera() {
+  const THREE = state.THREE;
+  const box = new THREE.Box3().setFromObject(state.root);
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const center = sphere.center.clone();
+  state.controls.target.copy(center);
+  const dist = (sphere.radius || 100) / Math.sin(Math.PI / 12) * 1.1;
+  const dir = new THREE.Vector3(0.72, 0.52, 0.85).normalize();
+  state.camera.position.copy(center).addScaledVector(dir, dist);
+  state.camera.near = Math.max(dist / 300, 0.5);
+  state.camera.far = dist * 14;
+  state.camera.updateProjectionMatrix();
+  state.controls.update();
+}
+
+/* ---------------- 构建 ---------------- */
+function disposeRoot() {
+  if (!state.root) return;
+  state.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+  state.scene.remove(state.root);
+  state.root = null;
+}
+
+function buildProduct(THREE) {
+  const spec = state.spec;
+  const model = buildModel(THREE, spec, state.params);
+  state.model = model;
+  model.errors.forEach((e) => log('bad', `特征 ${e.id}: ${e.message}`));
+
+  const root = new THREE.Group();
+  const parts = {};
+  Object.values(model.parts).forEach((p) => { parts[p.id] = { ...p, group: new THREE.Group() }; });
+
+  const bodyMat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(spec.meta?.accent || '#cfd8e0'),
+    roughness: 0.46, metalness: 0.06, clearcoat: 0.35, clearcoatRoughness: 0.55,
+    sheen: 0.2, sheenColor: new THREE.Color(0xffffff),
+  });
+  const cutMat = new THREE.MeshStandardMaterial({ color: 0x11323a, roughness: 0.88, metalness: 0.02 });
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x0a1116, transparent: true, opacity: 0.36 });
+
+  model.geoms.forEach((g) => {
+    const isCut = g.op === 'cut';
+    const mesh = new THREE.Mesh(g.geometry, isCut ? cutMat : bodyMat);
+    mesh.renderOrder = isCut ? 2 : 1;
+    mesh.castShadow = !isCut; mesh.receiveShadow = !isCut;
+    mesh.name = g.id;
+    const lines = new THREE.LineSegments(new THREE.EdgesGeometry(g.geometry, 34), edgeMat);
+    lines.renderOrder = 3;
+    const pg = parts[g.part]?.group || parts[Object.keys(parts)[0]]?.group;
+    if (pg) { pg.add(mesh); pg.add(lines); }
+    g.mesh = mesh;
+  });
+
+  Object.values(parts).forEach((p) => { if (p.group.children.length) root.add(p.group); });
+
+  // 关节：把子件挂到以 anchor 为原点的 pivot 上
+  const joints = model.joints.map((j) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(...j.anchor);
+    const child = parts[j.b];
+    if (child && child.group.parent) {
+      child.group.position.set(-j.anchor[0], -j.anchor[1], -j.anchor[2]);
+      pivot.add(child.group);
+      root.add(pivot);
+    }
+    return {
+      ...j, pivot,
+      axisVec: new THREE.Vector3(...j.axis).normalize(),
+      angle: j.rest,
+    };
+  });
+
+  state.root = root;
+  state.parts = parts;
+  state.joints = joints;
+  applyJointAngles();
+  return root;
+}
+
+function applyJointAngles() {
+  state.joints.forEach((j) => {
+    j.pivot.quaternion.setFromAxisAngle(j.axisVec, j.angle * Math.PI / 180);
+  });
+}
+
+/* ---------------- 指标 ---------------- */
+const fmt = (v) => {
+  if (v === undefined || v === null || isNaN(v)) return '—';
+  const a = Math.abs(v);
+  return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
+};
+
+/** 按关节静止姿态求单个特征的包围盒 */
+function posedBox(g) {
+  const THREE = state.THREE;
+  const b = g.bbox;
+  let pts = [];
+  [b.min.x, b.max.x].forEach((x) => [b.min.y, b.max.y].forEach((y) => [b.min.z, b.max.z].forEach((z) => {
+    pts.push(new THREE.Vector3(x, y, z));
+  })));
+  const j = state.joints.find((x) => x.b === g.part);
+  if (j) {
+    const a = new THREE.Vector3(...j.anchor);
+    const ang = j.rest * Math.PI / 180;
+    pts = pts.map((v) => v.sub(a).applyAxisAngle(j.axisVec, ang).add(a));
+  }
+  return pts.reduce((acc, p) => acc.expandByPoint(p), new THREE.Box3());
+}
+
+function metrics() {
+  const m = modelMetrics(state.THREE, state.model, state.spec);
+  // 包围盒/重心按静止姿态重算，保证与图纸一致
+  const THREE = state.THREE;
+  const adds = state.model.geoms.filter((g) => g.op !== 'cut');
+  if (adds.length) {
+    let box = null, cm = new THREE.Vector3(), wsum = 0;
+    adds.forEach((g) => {
+      const pb = posedBox(g);
+      box = box ? box.union(pb) : pb.clone();
+      cm.addScaledVector(pb.getCenter(new THREE.Vector3()), g.volume);
+      wsum += g.volume;
+    });
+    if (wsum > 0) cm.divideScalar(wsum);
+    if (box) { m.bbox = box; m.size = box.getSize(new THREE.Vector3()); m.cm = cm; }
+  }
+  return m;
+}
+
+/* ---------------- 面板 ---------------- */
+function renderPanel() {
+  const spec = state.spec;
+  $('#title').textContent = spec.meta?.name || 'Creative CAD';
+  $('#tagMeta').textContent = [spec.meta?.material, spec.meta?.process, spec.meta?.revision].filter(Boolean).join(' · ') || '—';
+  $('#brief').textContent = spec.meta?.brief || '（无简报）';
+
+  const box = $('#params'); box.innerHTML = '';
+  (spec.params || []).forEach((p) => {
+    const d = document.createElement('div');
+    d.className = 'slider';
+    d.innerHTML = `<label><span>${p.label || p.key}</span><b>${fmt(state.params[p.key])}${p.unit || ''}</b></label>
+      <input type="range" min="${p.min ?? 0}" max="${p.max ?? 100}" step="${p.step ?? 0.5}" value="${state.params[p.key]}">`;
+    const input = d.querySelector('input');
+    input.addEventListener('input', () => {
+      state.params[p.key] = Number(input.value);
+      d.querySelector('b').textContent = fmt(state.params[p.key]) + (p.unit || '');
+      rebuild();
+    });
+    box.appendChild(d);
+  });
+  updateKpi();
+}
+
+function updateKpi() {
+  const m = metrics();
+  const rows = [
+    ['包围盒 X×Z×Y', `${fmt(m.size.x)}×${fmt(m.size.z)}×${fmt(m.size.y)}`],
+    ['估算质量', `${fmt(m.mass)} g`],
+    ['材料', state.spec.meta?.material || '—'],
+    ['最小壁厚(近似)', m.minWall ? fmt(m.minWall) + ' mm' : '—'],
+  ];
+  $('#kpi').innerHTML = rows.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('');
+
+  $('#hud').innerHTML = [
+    `体积 <b>${fmt(m.volume / 1000)} cm³</b>`,
+    `质量 <b>${fmt(m.mass)} g</b>`,
+    `重心 <b>${fmt(m.cm.x)}, ${fmt(m.cm.y)}, ${fmt(m.cm.z)}</b>`,
+    `特征 <b>${state.model.geoms.length}</b>`,
+  ].map((t) => `<div class="chip">${t}</div>`).join('');
+
+  const checks = state.spec.checks || {};
+  if (checks.minWall && m.minWall && m.minWall < checks.minWall) {
+    log('warn', `最小壁厚 ${fmt(m.minWall)}mm < 规则值 ${checks.minWall}mm，注塑/打印风险。`);
+  }
+}
+
+function log(level, msg) {
+  const el = $('#log');
+  if (!el) return;
+  const t = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  el.innerHTML += `<div class="${level}">[${t}] ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ---------------- 模式 ---------------- */
+function setMode(mode) {
+  state.mode = mode;
+  document.body.className = 'mode-' + mode;
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+  $('#physBox').style.display = mode === 'physics' ? 'block' : 'none';
+  if (mode === 'sheet') { resize(); drawSheet(); }
+  if (mode !== 'physics') state.anim.playing = false;
+}
+
+/* ---------------- 物理预演 ---------------- */
+function startSweep() {
+  if (!state.joints.length) { log('warn', 'spec 中没有 joints，跳过运动扫掠。'); return; }
+  state.anim.playing = true;
+  state.anim.t = 0;
+  const j = state.joints[0];
+  log('ok', `关节「${j.def.id}」扫掠：${fmt(j.range[0])}° → ${fmt(j.range[1])}°`);
+}
+
+function updateSweep(dt) {
+  const j = state.joints[0];
+  if (!j || !state.anim.playing) return;
+  const THREE = state.THREE;
+  state.anim.t += dt;
+  const p = (state.anim.t % 5) / 5;
+  const ease = 0.5 - 0.5 * Math.cos(p * Math.PI * 2);
+  j.angle = j.range[0] + (j.range[1] - j.range[0]) * ease;
+  applyJointAngles();
+
+  const part = state.parts[j.b];
+  const partVol = part ? part.features.filter((f) => f.op !== 'cut').reduce((a, f) => a + f.volume, 0) : 0;
+  const massKg = partVol * (state.spec.meta?.density || 1.24) * 1e-6;
+  let lever = 0;
+  if (part) {
+    const box = new THREE.Box3();
+    part.features.filter((f) => f.op !== 'cut').forEach((f) => box.union(f.bbox));
+    const c = box.getCenter(new THREE.Vector3());
+    const d = c.clone().sub(j.pivot.position);
+    lever = Math.hypot(d.x, d.y, d.z) * Math.abs(Math.cos(j.angle * Math.PI / 180));
+  }
+  const torque = massKg * 9.81 * lever / 1000; // N·m
+
+  $('#mTorque').textContent = fmt(torque) + ' N·m';
+  $('#mAngle').textContent = fmt(j.angle) + '°';
+  $('#mBar').style.width = (100 * (j.angle - j.range[0]) / Math.max(j.range[1] - j.range[0], 1)) + '%';
+
+  const gap = jointClearance(j);
+  $('#mGap').textContent = gap === null ? '—' : fmt(gap) + ' mm';
+}
+
+function jointClearance(j) {
+  const THREE = state.THREE;
+  const child = state.parts[j.b];
+  if (!child) return null;
+  state.root.updateMatrixWorld(true);
+  let best = null;
+  Object.entries(state.parts).forEach(([id, p]) => {
+    if (id === j.b) return;
+    const other = new THREE.Box3();
+    let has = false;
+    p.features.forEach((f) => {
+      if (f.op === 'cut') return;
+      other.union(f.bbox.clone().applyMatrix4(f.mesh.matrixWorld)); has = true;
+    });
+    if (!has) return;
+    const cb = new THREE.Box3();
+    child.features.forEach((f) => {
+      if (f.op === 'cut') return;
+      cb.union(f.bbox.clone().applyMatrix4(f.mesh.matrixWorld));
+    });
+    const d = boxGap(cb, other);
+    best = best === null ? d : Math.min(best, d);
+  });
+  return best;
+}
+
+function boxGap(a, b) {
+  const dx = Math.max(0, Math.max(a.min.x - b.max.x, b.min.x - a.max.x));
+  const dy = Math.max(0, Math.max(a.min.y - b.max.y, b.min.y - a.max.y));
+  const dz = Math.max(0, Math.max(a.min.z - b.max.z, b.min.z - a.max.z));
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function stability() {
+  const m = metrics();
+  const adds = state.model.geoms.filter((g) => g.op !== 'cut');
+  if (!adds.length) return;
+  const minY = Math.min(...adds.map((g) => g.bbox.min.y));
+  const support = adds.filter((g) => g.bbox.min.y - minY < 10);
+  const sup = support.reduce((a, f) => (a ? a.union(f.bbox) : f.bbox.clone()), null);
+  if (!sup) return;
+  const margin = Math.min(
+    Math.abs(m.cm.x - sup.min.x), Math.abs(sup.max.x - m.cm.x),
+    Math.abs(m.cm.z - sup.min.z), Math.abs(sup.max.z - m.cm.z)
+  );
+  const comH = Math.max(m.cm.y - minY, 0.5);
+  const tip = Math.atan2(margin, comH) * 180 / Math.PI;
+  $('#mTip').textContent = fmt(tip) + '°';
+  log(tip > 18 ? 'ok' : 'warn',
+    `稳定性：重心投影距支撑边界 ${fmt(margin)}mm，静态倾覆角 ${fmt(tip)}°（>18° 视为安全）。`);
+}
+
+/* ---------------- 工程图 ---------------- */
+function drawSheet() {
+  const c = $('#sheet'), ctx = c.getContext('2d');
+  const dpr = devicePixelRatio;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const w = c.width / dpr, h = c.height / dpr;
+  ctx.fillStyle = '#f6f4ef'; ctx.fillRect(0, 0, w, h);
+
+  const THREE = state.THREE;
+  // 按关节静止姿态投影，图纸才和实际打开角度一致
+  const posed = state.model.geoms.filter((g) => g.bbox).map((g) => {
+    const j = state.joints.find((x) => x.b === g.part);
+    const b = g.bbox;
+    let pts = [];
+    [b.min.x, b.max.x].forEach((x) => [b.min.y, b.max.y].forEach((y) => [b.min.z, b.max.z].forEach((z) => {
+      pts.push(new THREE.Vector3(x, y, z));
+    })));
+    if (j) {
+      const a = new THREE.Vector3(...j.anchor);
+      const ang = j.rest * Math.PI / 180;
+      pts = pts.map((v) => v.sub(a).applyAxisAngle(j.axisVec, ang).add(a));
+    }
+    return { def: g.def, op: g.op, bbox: pts.reduce((acc, p) => acc.expandByPoint(p), new THREE.Box3()), pts };
+  });
+  const adds = posed.filter((f) => f.op !== 'cut');
+  if (!adds.length) return;
+  const box = adds.reduce((a, f) => a.union(f.bbox), new THREE.Box3());
+  const size = box.getSize(new THREE.Vector3());
+
+  const pad = 34, titleH = 112;
+  const availW = w - pad * 2, availH = h - pad * 2 - titleH;
+  const fr = { w: size.x, h: size.y };
+  const tp = { w: size.x, h: size.z };
+  const sd = { w: size.z, h: size.y };
+  const gap = 46;
+  const blockW = Math.max(fr.w, tp.w) + gap + sd.w + 40;
+  const blockH = fr.h + gap + tp.h + 40;
+  const fit = Math.min(availW / blockW, availH / blockH);
+  const STEPS = [5, 4, 3, 2, 1.5, 1, 1 / 1.5, 1 / 2, 1 / 3, 1 / 5, 1 / 10, 1 / 20];
+  const S = Math.max(STEPS.find((s) => s <= fit) || 1 / 20, 0.02);
+
+  const ox = pad + (availW - blockW * S) / 2;
+  const oy = pad + (availH - blockH * S) / 2;
+  const frontOrigin = [ox + 20 * S, oy + 20 * S];
+  const topOrigin = [ox + 20 * S, oy + (fr.h + gap + 20) * S];
+  const sideOrigin = [ox + (Math.max(fr.w, tp.w) + gap + 20) * S, oy + 20 * S];
+
+  // 视图投影：3D 点 → 图纸 2D（mm，y 向下）
+  const project = {
+    front: (p) => [p.x - box.min.x, box.max.y - p.y],
+    top: (p) => [p.x - box.min.x, box.max.z - p.z],
+    side: (p) => [p.z - box.min.z, box.max.y - p.y],
+  };
+
+  // 2D 凸包（Andrew monotone chain）
+  const hull = (pts) => {
+    const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    if (p.length < 3) return p;
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const q of p) {
+      while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop();
+      lo.push(q);
+    }
+    for (let i = p.length - 1; i >= 0; i--) {
+      const q = p[i];
+      while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop();
+      up.push(q);
+    }
+    lo.pop(); up.pop();
+    return lo.concat(up);
+  };
+
+  const drawView = (key, origin) => {
+    posed.forEach((f) => {
+      const isCircle = f.def?.sketch?.profile?.kind === 'circle';
+      const pts2 = f.pts.map(project[key]);
+      const sx = pts2.map((p) => origin[0] + p[0] * S);
+      const sy = pts2.map((p) => origin[1] + p[1] * S);
+      ctx.beginPath();
+      if (isCircle) {
+        const cx = (Math.min(...sx) + Math.max(...sx)) / 2, cy = (Math.min(...sy) + Math.max(...sy)) / 2;
+        const rx = Math.max((Math.max(...sx) - Math.min(...sx)) / 2, 0.4);
+        const ry = Math.max((Math.max(...sy) - Math.min(...sy)) / 2, 0.4);
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      } else {
+        const h = hull(pts2.map((p, i) => [sx[i], sy[i]]));
+        h.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+        ctx.closePath();
+      }
+      if (f.op === 'cut') {
+        ctx.setLineDash([4, 3]); ctx.strokeStyle = '#9aa3ac'; ctx.lineWidth = 0.9; ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        ctx.fillStyle = 'rgba(60,72,84,0.055)'; ctx.fill();
+        ctx.strokeStyle = '#2b333b'; ctx.lineWidth = 1.15; ctx.stroke();
+      }
+    });
+  };
+
+  drawView('front', frontOrigin);
+  drawView('top', topOrigin);
+  drawView('side', sideOrigin);
+
+  ctx.fillStyle = '#5b646d'; ctx.font = '11px "PingFang SC",system-ui,sans-serif';
+  ctx.fillText('主视图 FRONT', frontOrigin[0], frontOrigin[1] - 10);
+  ctx.fillText('俯视图 TOP', topOrigin[0], topOrigin[1] - 10);
+  ctx.fillText('左视图 LEFT', sideOrigin[0], sideOrigin[1] - 10);
+
+  const arrow = (x, y, ang) => {
+    ctx.beginPath(); ctx.moveTo(x, y);
+    ctx.lineTo(x - 6 * Math.cos(ang - 0.3), y - 6 * Math.sin(ang - 0.3));
+    ctx.lineTo(x - 6 * Math.cos(ang + 0.3), y - 6 * Math.sin(ang + 0.3));
+    ctx.closePath(); ctx.fill();
+  };
+  const dim = (x1, y1, x2, y2, text) => {
+    ctx.strokeStyle = '#2b333b'; ctx.fillStyle = '#2b333b'; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    const a1 = Math.atan2(y2 - y1, x2 - x1);
+    arrow(x1, y1, a1); arrow(x2, y2, a1 + Math.PI);
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    ctx.font = '11px ui-monospace,monospace';
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = '#f6f4ef'; ctx.fillRect(mx - tw / 2 - 3, my - 8, tw + 6, 14);
+    ctx.fillStyle = '#2b333b'; ctx.fillText(text, mx - tw / 2, my + 3);
+  };
+
+  dim(frontOrigin[0], frontOrigin[1] + fr.h * S + 24, frontOrigin[0] + fr.w * S, frontOrigin[1] + fr.h * S + 24, fmt(fr.w));
+  dim(frontOrigin[0] - 22, frontOrigin[1], frontOrigin[0] - 22, frontOrigin[1] + fr.h * S, fmt(fr.h));
+  dim(topOrigin[0] + tp.w * S + 22, topOrigin[1], topOrigin[0] + tp.w * S + 22, topOrigin[1] + tp.h * S, fmt(tp.h));
+
+  // 标题栏
+  const tx = w - 304, ty = h - titleH + 10;
+  ctx.strokeStyle = '#2b333b'; ctx.lineWidth = 1;
+  ctx.strokeRect(tx, ty, 288, 84);
+  ctx.beginPath();
+  ctx.moveTo(tx, ty + 34); ctx.lineTo(tx + 288, ty + 34);
+  ctx.moveTo(tx + 154, ty + 34); ctx.lineTo(tx + 154, ty + 84);
+  ctx.stroke();
+
+  ctx.fillStyle = '#2b333b';
+  ctx.font = '600 13px "PingFang SC",system-ui,sans-serif';
+  ctx.fillText(state.spec.meta?.name || '未命名', tx + 10, ty + 21);
+  ctx.font = '10px ui-monospace,monospace'; ctx.fillStyle = '#5b646d';
+  ctx.fillText('MATERIAL', tx + 10, ty + 48);
+  ctx.fillText('SCALE', tx + 164, ty + 48);
+  ctx.fillStyle = '#2b333b'; ctx.font = '11px ui-monospace,monospace';
+  ctx.fillText(state.spec.meta?.material || '—', tx + 10, ty + 62);
+  ctx.fillText(S >= 1 ? +S.toFixed(2) + ':1' : '1:' + +(1 / S).toFixed(2), tx + 164, ty + 62);
+  ctx.fillStyle = '#8a929a'; ctx.font = '9px system-ui,sans-serif';
+  ctx.fillText('自动生成 · 需人工校核 · 单位 mm' + (state.spec.meta?.revision ? ' · ' + state.spec.meta.revision : ''), tx + 10, ty + 80);
+
+  ctx.strokeStyle = '#c9c4ba'; ctx.lineWidth = 1.4;
+  ctx.strokeRect(10, 10, w - 20, h - 20);
+}
+
+/* ---------------- 重建 ---------------- */
+function rebuild() {
+  if (!state.THREE) return;
+  disposeRoot();
+  try {
+    state.scene.add(buildProduct(state.THREE));
+    updateKpi();
+    if (state.mode === 'sheet') drawSheet();
+  } catch (e) {
+    log('bad', '重建失败：' + e.message);
+  }
+}
+
+/* ---------------- 主循环 ---------------- */
+let last = performance.now();
+function tick(now) {
+  requestAnimationFrame(tick);
+  const dt = Math.min((now - last) / 1000, 0.06);
+  last = now;
+  if (!state.renderer) return;
+  if (state.mode !== 'sheet') {
+    if (state.mode === 'physics') updateSweep(dt);
+    state.controls.update();
+    state.renderer.render(state.scene, state.camera);
+  }
+}
+
+/* ---------------- 启动 ---------------- */
+(async function boot() {
+  try {
+    document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+    $('#btnPlay').addEventListener('click', startSweep);
+    $('#btnStable').addEventListener('click', stability);
+
+    await loadSpec();
+    await initScene();
+    state.scene.add(buildProduct(state.THREE));
+    renderPanel();
+    frameCamera();
+    $('#loading').classList.add('hide');
+    log('ok', `载入 ${state.spec.meta?.name || 'spec'}：${state.model.geoms.length} 特征 / ${state.joints.length} 关节`);
+    setMode('render');
+    requestAnimationFrame(tick);
+  } catch (e) {
+    $('#loading').textContent = '初始化失败：' + e.message;
+    console.error(e);
+  }
+})();
+
+/* 内置兜底示例（fetch 失败时使用） */
+window.__DEMO_SPEC__ = {
+  meta: { name: 'Demo · 立牌', units: 'mm', material: 'PLA', process: '3d-print', density: 1.24, accent: '#5eead4', brief: '内置示例：读取 spec.json 失败时的兜底几何。' },
+  params: [{ key: 'w', label: '宽', value: 60, min: 30, max: 120, unit: 'mm' }],
+  parts: [{ id: 'base', label: '主体' }],
+  features: [
+    { id: 'body', part: 'base', op: 'add', sketch: { plane: 'top', offset: 0, profile: { kind: 'rect', w: '$w', h: 40, cr: 6 } }, extrude: { depth: 8, dir: 'up' } },
+    { id: 'hole', part: 'base', op: 'cut', sketch: { plane: 'top', offset: 8.3, profile: { kind: 'circle', d: 10, center: [0, 0] } }, extrude: { depth: 9, dir: 'down' } },
+  ],
+  joints: [],
+  checks: { minWall: 1.6 },
+};
+</script>
+</body>
+</html>

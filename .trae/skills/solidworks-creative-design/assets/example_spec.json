@@ -1,0 +1,267 @@
+{
+  "meta": {
+    "name": "FoldStand 折叠平板支架",
+    "brief": "桌面临时收纳折叠支架，展开约 22° 观看角，合上即平放，单件 3D 打印免支撑",
+    "units": "mm",
+    "process": "3d-print",
+    "material": "PETG",
+    "density": 1.27,
+    "accent": "#5eead4",
+    "revision": "v0.1"
+  },
+  "params": [
+    {
+      "key": "plate_w",
+      "label": "底座宽",
+      "value": 92,
+      "min": 70,
+      "max": 130,
+      "unit": "mm"
+    },
+    {
+      "key": "plate_d",
+      "label": "底座深",
+      "value": 70,
+      "min": 55,
+      "max": 110,
+      "unit": "mm"
+    },
+    {
+      "key": "plate_t",
+      "label": "底座厚",
+      "value": 8,
+      "min": 5,
+      "max": 14,
+      "unit": "mm"
+    },
+    {
+      "key": "arm_h",
+      "label": "支撑臂高",
+      "value": 96,
+      "min": 60,
+      "max": 140,
+      "unit": "mm"
+    },
+    {
+      "key": "arm_w",
+      "label": "支撑臂宽",
+      "value": 64,
+      "min": 40,
+      "max": 90,
+      "unit": "mm"
+    },
+    {
+      "key": "open_angle",
+      "label": "开启角",
+      "value": 22,
+      "min": 12,
+      "max": 78,
+      "unit": "deg"
+    }
+  ],
+  "parts": [
+    {
+      "id": "base",
+      "label": "底座"
+    },
+    {
+      "id": "arm",
+      "label": "支撑臂"
+    }
+  ],
+  "features": [
+    {
+      "id": "base_body",
+      "label": "底座主体",
+      "part": "base",
+      "op": "add",
+      "sketch": {
+        "plane": "top",
+        "offset": 0,
+        "profile": {
+          "kind": "rect",
+          "w": "$plate_w",
+          "h": "$plate_d",
+          "center": [
+            0,
+            0
+          ],
+          "cr": 12
+        }
+      },
+      "extrude": {
+        "depth": "$plate_t",
+        "dir": "up",
+        "draft": 1.0
+      }
+    },
+    {
+      "id": "base_pocket",
+      "label": "底部减重槽",
+      "part": "base",
+      "op": "cut",
+      "sketch": {
+        "plane": "top",
+        "offset": "$plate_t + 0.3",
+        "profile": {
+          "kind": "rect",
+          "w": "$plate_w - 18",
+          "h": "$plate_d - 18",
+          "center": [
+            0,
+            0
+          ],
+          "cr": 8
+        }
+      },
+      "extrude": {
+        "depth": 4.5,
+        "dir": "down"
+      }
+    },
+    {
+      "id": "screw_h1",
+      "label": "螺钉孔 M4",
+      "part": "base",
+      "op": "cut",
+      "sketch": {
+        "plane": "top",
+        "offset": "$plate_t + 0.3",
+        "profile": {
+          "kind": "circle",
+          "d": 4.4,
+          "center": [
+            -34,
+            -24
+          ]
+        }
+      },
+      "extrude": {
+        "depth": "$plate_t + 1",
+        "dir": "down"
+      }
+    },
+    {
+      "id": "screw_h2",
+      "label": "螺钉孔 M4",
+      "part": "base",
+      "op": "cut",
+      "sketch": {
+        "plane": "top",
+        "offset": "$plate_t + 0.3",
+        "profile": {
+          "kind": "circle",
+          "d": 4.4,
+          "center": [
+            34,
+            -24
+          ]
+        }
+      },
+      "extrude": {
+        "depth": "$plate_t + 1",
+        "dir": "down"
+      }
+    },
+    {
+      "id": "arm_body",
+      "label": "支撑臂主板",
+      "part": "arm",
+      "op": "add",
+      "sketch": {
+        "plane": "front",
+        "offset": -3,
+        "profile": {
+          "kind": "rect",
+          "w": "$arm_w",
+          "h": "$arm_h",
+          "center": [
+            0,
+            "$arm_h/2 + $plate_t + 4"
+          ],
+          "cr": 10
+        }
+      },
+      "extrude": {
+        "depth": 6,
+        "dir": "up"
+      }
+    },
+    {
+      "id": "arm_slot",
+      "label": "臂部减轻槽",
+      "part": "arm",
+      "op": "cut",
+      "sketch": {
+        "plane": "front",
+        "offset": 3.3,
+        "profile": {
+          "kind": "rect",
+          "w": "$arm_w - 22",
+          "h": "$arm_h - 34",
+          "center": [
+            0,
+            "$arm_h/2 + $plate_t + 10"
+          ],
+          "cr": 8
+        }
+      },
+      "extrude": {
+        "depth": 6.6,
+        "dir": "down"
+      }
+    },
+    {
+      "id": "arm_hook",
+      "label": "托边翻边",
+      "part": "arm",
+      "op": "add",
+      "sketch": {
+        "plane": "front",
+        "offset": -3,
+        "profile": {
+          "kind": "rect",
+          "w": "$arm_w - 4",
+          "h": 14,
+          "center": [
+            0,
+            "$arm_h + $plate_t + 8"
+          ],
+          "cr": 6
+        }
+      },
+      "extrude": {
+        "depth": 20,
+        "dir": "up"
+      }
+    }
+  ],
+  "joints": [
+    {
+      "id": "hinge",
+      "type": "revolute",
+      "a": "base",
+      "b": "arm",
+      "anchor": [
+        0,
+        "$plate_t + 4",
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "range": [
+        12,
+        78
+      ],
+      "rest": "$open_angle"
+    }
+  ],
+  "checks": {
+    "minWall": 1.6,
+    "minCorner": 1.0,
+    "minClearance": 0.4
+  }
+}
