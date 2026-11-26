@@ -483,26 +483,48 @@ function jointClearance(j) {
   const THREE = state.THREE;
   const child = state.parts[j.b];
   if (!child) return null;
-  state.root.updateMatrixWorld(true);
-  let best = null;
+  const a = new THREE.Vector3(...j.anchor);
+  const at = (rec, deg) => {
+    const q = new THREE.Quaternion().setFromAxisAngle(j.axisVec, deg * Math.PI / 180);
+    const m = new THREE.Matrix4()
+      .makeTranslation(a.x, a.y, a.z)
+      .multiply(new THREE.Matrix4().makeRotationFromQuaternion(q))
+      .multiply(new THREE.Matrix4().makeTranslation(-a.x, -a.y, -a.z));
+    return (rec.bbox || rec).clone().applyMatrix4(m);
+  };
+  const childFeats = child.features.filter((f) => f.op !== 'cut');
+  const otherFeats = [];
   Object.entries(state.parts).forEach(([id, p]) => {
     if (id === j.b) return;
-    const other = new THREE.Box3();
-    let has = false;
-    p.features.forEach((f) => {
-      if (f.op === 'cut') return;
-      other.union(f.bbox.clone().applyMatrix4(f.mesh.matrixWorld)); has = true;
-    });
-    if (!has) return;
-    const cb = new THREE.Box3();
-    child.features.forEach((f) => {
-      if (f.op === 'cut') return;
-      cb.union(f.bbox.clone().applyMatrix4(f.mesh.matrixWorld));
-    });
-    const d = boxGap(cb, other);
-    best = best === null ? d : Math.min(best, d);
+    p.features.forEach((f) => { if (f.op !== 'cut') otherFeats.push(f); });
   });
+  let best = null;
+  childFeats.forEach((cf) => otherFeats.forEach((of) => {
+    // 静止姿态下就重叠的特征对属于铰接结构本身，不计入干涉
+    if (boxGap(cf.bbox, of.bbox) < 0.01) return;
+    // 长件用分片包围盒，避免旋转后 AABB 过度松散造成误报
+    slicesOf(cf).forEach((sl) => {
+      const d = boxGap(at(sl, j.angle), of.bbox);
+      best = best === null ? d : Math.min(best, d);
+    });
+  }));
   return best;
+}
+
+// 沿最长轴把包围盒切成 n 片，旋转后逐片求 AABB 间隙
+function slicesOf(rec, n = 8) {
+  const THREE = state.THREE;
+  const b = rec.bbox, size = b.getSize(new THREE.Vector3());
+  const axis = size.x >= size.y && size.x >= size.z ? 'x' : (size.y >= size.z ? 'y' : 'z');
+  const lo = b.min[axis], step = (b.max[axis] - lo) / n;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const nb = b.clone();
+    nb.min[axis] = lo + step * i;
+    nb.max[axis] = lo + step * (i + 1);
+    out.push(nb);
+  }
+  return out;
 }
 
 function boxGap(a, b) {
@@ -565,18 +587,20 @@ function drawSheet() {
   const fr = { w: size.x, h: size.y };
   const tp = { w: size.x, h: size.z };
   const sd = { w: size.z, h: size.y };
-  const gap = 46;
-  const blockW = Math.max(fr.w, tp.w) + gap + sd.w + 40;
-  const blockH = fr.h + gap + tp.h + 40;
-  const fit = Math.min(availW / blockW, availH / blockH);
+  const GAP = 72;                       // 视图间距用像素，避免小比例时挤在一起
+  const fitW = (availW - GAP - 60) / Math.max(Math.max(fr.w, tp.w) + sd.w, 1);
+  const fitH = (availH - GAP - 40) / Math.max(fr.h + tp.h, 1);
+  const fit = Math.min(fitW, fitH);
   const STEPS = [5, 4, 3, 2, 1.5, 1, 1 / 1.5, 1 / 2, 1 / 3, 1 / 5, 1 / 10, 1 / 20];
   const S = Math.max(STEPS.find((s) => s <= fit) || 1 / 20, 0.02);
 
-  const ox = pad + (availW - blockW * S) / 2;
-  const oy = pad + (availH - blockH * S) / 2;
-  const frontOrigin = [ox + 20 * S, oy + 20 * S];
-  const topOrigin = [ox + 20 * S, oy + (fr.h + gap + 20) * S];
-  const sideOrigin = [ox + (Math.max(fr.w, tp.w) + gap + 20) * S, oy + 20 * S];
+  const totalW = Math.max(fr.w, tp.w) * S + GAP + sd.w * S;
+  const totalH = fr.h * S + GAP + tp.h * S;
+  const ox = pad + Math.max((availW - totalW) / 2, 0) + 30;
+  const oy = pad + Math.max((availH - totalH) / 2, 0) + 34;
+  const frontOrigin = [ox, oy];
+  const topOrigin = [ox, oy + fr.h * S + GAP];
+  const sideOrigin = [ox + Math.max(fr.w, tp.w) * S + GAP, oy];
 
   // 视图投影：3D 点 → 图纸 2D（mm，y 向下）
   const project = {
@@ -636,9 +660,9 @@ function drawSheet() {
   drawView('side', sideOrigin);
 
   ctx.fillStyle = '#5b646d'; ctx.font = '11px "PingFang SC",system-ui,sans-serif';
-  ctx.fillText('主视图 FRONT', frontOrigin[0], frontOrigin[1] - 10);
-  ctx.fillText('俯视图 TOP', topOrigin[0], topOrigin[1] - 10);
-  ctx.fillText('左视图 LEFT', sideOrigin[0], sideOrigin[1] - 10);
+  ctx.fillText('主视图 FRONT', frontOrigin[0], frontOrigin[1] - 48);
+  ctx.fillText('俯视图 TOP', topOrigin[0], topOrigin[1] - 26);
+  ctx.fillText('左视图 LEFT', sideOrigin[0], sideOrigin[1] - 48);
 
   const arrow = (x, y, ang) => {
     ctx.beginPath(); ctx.moveTo(x, y);
@@ -658,9 +682,9 @@ function drawSheet() {
     ctx.fillStyle = '#2b333b'; ctx.fillText(text, mx - tw / 2, my + 3);
   };
 
-  dim(frontOrigin[0], frontOrigin[1] + fr.h * S + 24, frontOrigin[0] + fr.w * S, frontOrigin[1] + fr.h * S + 24, fmt(fr.w));
-  dim(frontOrigin[0] - 22, frontOrigin[1], frontOrigin[0] - 22, frontOrigin[1] + fr.h * S, fmt(fr.h));
-  dim(topOrigin[0] + tp.w * S + 22, topOrigin[1], topOrigin[0] + tp.w * S + 22, topOrigin[1] + tp.h * S, fmt(tp.h));
+  dim(frontOrigin[0], frontOrigin[1] - 24, frontOrigin[0] + fr.w * S, frontOrigin[1] - 24, fmt(fr.w));
+  dim(frontOrigin[0] - 24, frontOrigin[1], frontOrigin[0] - 24, frontOrigin[1] + fr.h * S, fmt(fr.h));
+  dim(topOrigin[0] + tp.w * S + 24, topOrigin[1], topOrigin[0] + tp.w * S + 24, topOrigin[1] + tp.h * S, fmt(tp.h));
 
   // 标题栏
   const tx = w - 304, ty = h - titleH + 10;

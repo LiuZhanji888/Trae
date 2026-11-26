@@ -1,0 +1,201 @@
+{
+  "meta": {
+    "name": "SproutCart 校园一体化种树车",
+    "brief": "两轮手推式种树车：储苗 → 前伸钻臂开穴 → 下苗覆土。1 人推行，站姿操作不弯腰，适配校园草坪/花坛的小规模补植。",
+    "units": "mm",
+    "process": "cnc",
+    "material": "AL6061",
+    "density": 2.70,
+    "accent": "#7dd3a0",
+    "revision": "v0.2",
+    "assumptions": [
+      "苗型为容器苗，土球 Ø70–80，苗高 300–600",
+      "适用土质为校园常见壤土/草皮，不含碎石层；硬土需先浇水软化",
+      "整车目标重量 ≤ 40kg，1 名成人可推上 5° 缓坡",
+      "钻头为外购 Ø90 螺旋钻，本 spec 只表达机架与运动包络",
+      "钻臂铰点前置到车体前方 230mm，避免俯冲时扫入车体（v0.1 的干涉已修正）",
+      "苗筒为独立件，图示为焊接在钻臂上的导向套"
+    ]
+  },
+  "params": [
+    { "key": "deck_w", "label": "车台宽", "value": 560, "min": 460, "max": 700, "unit": "mm" },
+    { "key": "deck_d", "label": "车台深", "value": 400, "min": 320, "max": 520, "unit": "mm" },
+    { "key": "deck_t", "label": "车台厚", "value": 8, "min": 6, "max": 16, "unit": "mm" },
+    { "key": "wheel_d", "label": "轮径", "value": 300, "min": 220, "max": 400, "unit": "mm" },
+    { "key": "mast_h", "label": "苗架立柱高", "value": 560, "min": 420, "max": 700, "unit": "mm" },
+    { "key": "arm_len", "label": "钻臂长", "value": 490, "min": 360, "max": 620, "unit": "mm" },
+    { "key": "drill_d", "label": "钻头直径", "value": 90, "min": 70, "max": 120, "unit": "mm" },
+    { "key": "drill_len", "label": "钻头长", "value": 250, "min": 180, "max": 340, "unit": "mm" },
+    { "key": "open_angle", "label": "钻臂姿态", "value": 0, "min": -8, "max": 25, "unit": "deg" }
+  ],
+  "parts": [
+    { "id": "cart", "label": "车体" },
+    { "id": "arm", "label": "钻臂组" }
+  ],
+  "features": [
+    {
+      "id": "deck",
+      "label": "车台板",
+      "part": "cart",
+      "op": "add",
+      "sketch": { "plane": "top", "offset": 200, "profile": { "kind": "rect", "w": "$deck_w", "h": "$deck_d", "center": [0, 0], "cr": 24 } },
+      "extrude": { "depth": "$deck_t", "dir": "up" }
+    },
+    {
+      "id": "deck_pocket",
+      "label": "台面减重槽",
+      "part": "cart",
+      "op": "cut",
+      "sketch": { "plane": "top", "offset": "$deck_t + 200.3", "profile": { "kind": "rect", "w": "$deck_w - 60", "h": "$deck_d - 60", "center": [0, 0], "cr": 16 } },
+      "extrude": { "depth": "$deck_t - 3", "dir": "down" }
+    },
+    {
+      "id": "wheel_l",
+      "label": "左轮",
+      "part": "cart",
+      "op": "add",
+      "sketch": { "plane": "right", "offset": "-($deck_w/2) - 90", "profile": { "kind": "circle", "d": "$wheel_d", "center": [130, "$wheel_d/2"] } },
+      "extrude": { "depth": 60, "dir": "up" }
+    },
+    {
+      "id": "wheel_r",
+      "label": "右轮",
+      "part": "cart",
+      "op": "add",
+      "sketch": { "plane": "right", "offset": "$deck_w/2 + 30", "profile": { "kind": "circle", "d": "$wheel_d", "center": [130, "$wheel_d/2"] } },
+      "extrude": { "depth": 60, "dir": "up" }
+    },
+    {
+      "id": "wheel_hole_l",
+      "label": "左轮减重孔",
+      "part": "cart",
+      "op": "cut",
+      "sketch": { "plane": "right", "offset": "-($deck_w/2) - 91", "profile": { "kind": "circle", "d": 220, "center": [130, "$wheel_d/2"] } },
+      "extrude": { "depth": 62, "dir": "up" }
+    },
+    {
+      "id": "wheel_hole_r",
+      "label": "右轮减重孔",
+      "part": "cart",
+      "op": "cut",
+      "sketch": { "plane": "right", "offset": "$deck_w/2 + 29", "profile": { "kind": "circle", "d": 220, "center": [130, "$wheel_d/2"] } },
+      "extrude": { "depth": 62, "dir": "up" }
+    },
+    {
+      "id": "axle",
+      "label": "轮轴",
+      "part": "cart",
+      "op": "add",
+      "sketch": { "plane": "right", "offset": "-($deck_w/2) - 90", "profile": { "kind": "circle", "d": 24, "center": [130, "$wheel_d/2"] } },
+      "extrude": { "depth": "$deck_w + 180", "dir": "up" }
+    },
+    {
+      "id": "mast",
+      "label": "苗架立柱",
+      "part": "cart",
+      "op": "add",
+      "sketch": { "plane": "front", "offset": -10, "profile": { "kind": "rect", "w": 110, "h": "$mast_h", "center": [0, "200 + $mast_h/2"], "cr": 16 } },
+      "extrude": { "depth": 20, "dir": "up" }
+    },
+    {
+      "id": "handle",
+      "label": "推手（Π 形）",
+      "part": "cart",
+      "op": "add",
+      "sketch": {
+        "plane": "front",
+        "offset": "-($deck_d/2) - 6",
+        "profile": {
+          "kind": "polygon",
+          "pts": [
+            [-230, 200], [-230, 878], [230, 878], [230, 200],
+            [170, 200], [170, 842], [-170, 842], [-170, 200]
+          ]
+        }
+      },
+      "extrude": { "depth": 12, "dir": "up" }
+    },
+    {
+      "id": "boom_mount",
+      "label": "前伸铰座",
+      "part": "cart",
+      "op": "add",
+      "sketch": { "plane": "front", "offset": -230, "profile": { "kind": "rect", "w": 120, "h": 90, "center": [0, 275], "cr": 12 } },
+      "extrude": { "depth": 60, "dir": "up" }
+    },
+    {
+      "id": "caster_post",
+      "label": "前万向轮支腿",
+      "part": "cart",
+      "op": "add",
+      "sketch": { "plane": "front", "offset": -250, "profile": { "kind": "rect", "w": 54, "h": 120, "center": [0, 140], "cr": 10 } },
+      "extrude": { "depth": 50, "dir": "up" }
+    },
+    {
+      "id": "caster_wheel",
+      "label": "前万向轮",
+      "part": "cart",
+      "op": "add",
+      "sketch": { "plane": "right", "offset": -25, "profile": { "kind": "circle", "d": 80, "center": [250, 40] } },
+      "extrude": { "depth": 50, "dir": "up" }
+    },
+    {
+      "id": "battery_box",
+      "label": "电池箱（兼配重）",
+      "part": "cart",
+      "op": "add",
+      "sketch": { "plane": "top", "offset": "200 + $deck_t", "profile": { "kind": "rect", "w": 240, "h": 80, "center": [0, -155], "cr": 10 } },
+      "extrude": { "depth": 80, "dir": "up" }
+    },
+    {
+      "id": "arm_body",
+      "label": "钻臂",
+      "part": "arm",
+      "op": "add",
+      "sketch": { "plane": "right", "offset": -25, "profile": { "kind": "rect", "w": "$arm_len", "h": 70, "center": ["$arm_len/2 + 230", 285], "cr": 18 } },
+      "extrude": { "depth": 50, "dir": "up" }
+    },
+    {
+      "id": "drill_head",
+      "label": "螺旋钻",
+      "part": "arm",
+      "op": "add",
+      "sketch": { "plane": "top", "offset": 250, "profile": { "kind": "circle", "d": "$drill_d", "center": [0, "$arm_len + 140"] } },
+      "extrude": { "depth": "$drill_len", "dir": "down" }
+    },
+    {
+      "id": "hopper",
+      "label": "苗筒",
+      "part": "arm",
+      "op": "add",
+      "sketch": { "plane": "top", "offset": 320, "profile": { "kind": "circle", "d": 120, "center": [0, "$arm_len + 20"] } },
+      "extrude": { "depth": 110, "dir": "up" }
+    },
+    {
+      "id": "hopper_bore",
+      "label": "苗筒内孔",
+      "part": "arm",
+      "op": "cut",
+      "sketch": { "plane": "top", "offset": 431, "profile": { "kind": "circle", "d": 82, "center": [0, "$arm_len + 20"] } },
+      "extrude": { "depth": 112, "dir": "down" }
+    }
+  ],
+  "joints": [
+    {
+      "id": "drill_pivot",
+      "type": "revolute",
+      "a": "cart",
+      "b": "arm",
+      "anchor": [0, 285, -230],
+      "axis": [1, 0, 0],
+      "range": [-8, 25],
+      "rest": "$open_angle",
+      "note": "铰点前置在车体前方 230mm；0° 钻尖触地，+25° 抬起运输，-8° 下压钻进"
+    }
+  ],
+  "checks": {
+    "minWall": 3.0,
+    "minCorner": 2.0,
+    "minClearance": 6.0
+  }
+}
